@@ -1,4 +1,4 @@
-// src/components/Sidebar.tsx
+// src/components/Sidebar.tsx (Updated)
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -11,9 +11,13 @@ import {
   X,
   School,
   Award,
+  Calendar,
+  ClipboardCheck,
+  FileEdit,
+  FileQuestion,
 } from "lucide-react";
 import { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext"; // ADD THIS IMPORT
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -23,10 +27,10 @@ interface SidebarProps {
 export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuth(); // ADD THIS
+  const { currentUser, logout } = useAuth();
   
-  // Determine role from actual user data, NOT from URL (SECURITY FIX)
   const isAdmin = currentUser?.role === 'admin';
+  const isTeacher = currentUser?.role === 'teacher';
   
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -45,6 +49,11 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
       label: "Teacher Management",
       href: "/admin/teacher-management",
       icon: Users,
+    },
+    {
+      label: "Attendance Overview",
+      href: "/admin/attendance",
+      icon: ClipboardCheck,
     },
     {
       label: "Results Analysis",
@@ -70,6 +79,21 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
       icon: BookOpen,
     },
     {
+      label: "Attendance",
+      href: "/teacher/attendance",
+      icon: Calendar,
+    },
+    {
+      label: "Lesson Planning",
+      href: "/teacher/lesson-plans",
+      icon: FileEdit,
+    },
+    {
+      label: "Assessment Generator",
+      href: "/teacher/assessments",
+      icon: FileQuestion,
+    },
+    {
       label: "Results Analysis",
       href: "/teacher/results-analysis",
       icon: Award,
@@ -82,7 +106,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
   const handleLogout = async () => {
     try {
-      await logout(); // Use the actual logout function from AuthContext
+      await logout();
       navigate("/");
     } catch (error) {
       console.error("Logout error:", error);
@@ -91,7 +115,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile Menu Button */}
       <button
         onClick={() => setMobileOpen(!mobileOpen)}
         className="lg:hidden fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary/90"
@@ -103,14 +126,12 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         )}
       </button>
 
-      {/* Sidebar */}
       <aside
         className={`fixed lg:static top-0 left-0 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 z-40 ${
           mobileOpen ? "w-64" : "w-0 lg:w-64"
         } overflow-hidden`}
       >
         <div className="flex flex-col h-full">
-          {/* Logo & User Info */}
           <div className="p-6 flex items-center gap-3 border-b border-sidebar-border">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center flex-shrink-0">
               <span className="text-white font-heading font-bold">
@@ -135,7 +156,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             </div>
           </div>
 
-          {/* Navigation */}
           <nav className="flex-1 overflow-y-auto px-3 py-6 space-y-1">
             {menuItems.map((item) => {
               const Icon = item.icon;
@@ -158,7 +178,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
             })}
           </nav>
 
-          {/* Footer Actions */}
           <div className="border-t border-sidebar-border p-3 space-y-1">
             <Link
               to="#"
@@ -182,7 +201,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </div>
       </aside>
 
-      {/* Mobile Overlay */}
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 lg:hidden"
