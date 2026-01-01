@@ -1,5 +1,5 @@
-// pages/TeacherDashboard/AttendanceRollCall.tsx
-import React, { useState, useEffect, useMemo } from "react";
+// pages/TeacherDashboard/AttendanceRollCall.tsx - CLEANED & OPTIMIZED VERSION
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Check,
   X,
@@ -11,271 +11,411 @@ import {
   Save,
   Send,
   Loader2,
-  ChevronDown,
-  User,
   UserCheck,
   UserX,
+  AlertCircle,
+  Circle,
+  RefreshCw,
 } from "lucide-react";
-import { useAttendance, AttendanceSession } from "@/hooks/useAttendance";
+import { useAttendance } from "@/hooks/useAttendance";
 import { useTeacherManagement } from "@/hooks/useTeacherManagement";
 import { useClassManagement } from "@/hooks/useClasses";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { format } from "date-fns";
 
-// Status Badge Component
-const StatusBadge = ({ 
+// Status Button Component
+const StatusButton = ({ 
   status, 
+  isSelected,
   onClick,
-  size = "md"
+  count
 }: { 
-  status: "present" | "absent" | "late" | "excused";
-  onClick?: () => void;
-  size?: "sm" | "md" | "lg";
+  status: "present" | "absent" | "late" | "excused" | "pending";
+  isSelected: boolean;
+  onClick: () => void;
+  count?: number;
 }) => {
   const config = {
     present: { 
-      color: "bg-green-100 text-green-800 border-green-200", 
+      color: "bg-green-100 text-green-800 hover:bg-green-200",
+      activeColor: "bg-green-500 text-white",
       icon: <Check className="w-4 h-4" />,
       label: "Present"
     },
     absent: { 
-      color: "bg-red-100 text-red-800 border-red-200", 
+      color: "bg-red-100 text-red-800 hover:bg-red-200",
+      activeColor: "bg-red-500 text-white",
       icon: <X className="w-4 h-4" />,
       label: "Absent"
     },
     late: { 
-      color: "bg-amber-100 text-amber-800 border-amber-200", 
+      color: "bg-amber-100 text-amber-800 hover:bg-amber-200",
+      activeColor: "bg-amber-500 text-white",
       icon: <Clock className="w-4 h-4" />,
       label: "Late"
     },
     excused: { 
-      color: "bg-purple-100 text-purple-800 border-purple-200", 
+      color: "bg-purple-100 text-purple-800 hover:bg-purple-200",
+      activeColor: "bg-purple-500 text-white",
       icon: <FileText className="w-4 h-4" />,
       label: "Excused"
     },
+    pending: { 
+      color: "bg-gray-100 text-gray-800 hover:bg-gray-200",
+      activeColor: "bg-gray-500 text-white",
+      icon: <Circle className="w-4 h-4" />,
+      label: "Pending"
+    },
   };
 
-  const { color, icon, label } = config[status];
-  const sizeClasses = {
-    sm: "px-2 py-1 text-xs",
-    md: "px-3 py-1.5 text-sm",
-    lg: "px-4 py-2 text-base"
-  };
+  const { color, activeColor, icon, label } = config[status];
 
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 ${color} border rounded-lg font-medium ${sizeClasses[size]} hover:opacity-90 transition-opacity`}
+      className={`flex flex-col items-center justify-center p-3 rounded-lg transition-all duration-200 ${
+        isSelected ? activeColor : color
+      } ${isSelected ? 'scale-105 shadow-md' : 'hover:scale-[1.02]'}`}
     >
-      {icon}
-      <span>{label}</span>
-      {onClick && <ChevronDown className="w-3 h-3" />}
+      <div className="flex items-center gap-2">
+        {icon}
+        <span className="font-medium text-sm">{label}</span>
+        {count !== undefined && (
+          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+            isSelected ? 'bg-white/30' : 'bg-black/10'
+          }`}>
+            {count}
+          </span>
+        )}
+      </div>
     </button>
   );
 };
 
-// Status Selector Modal
-const StatusSelectorModal = ({ 
-  isOpen, 
-  onClose, 
-  onSelect,
-  currentStatus,
-  learnerName
+// Quick Actions Bar
+const QuickActionsBar = ({ 
+  onMarkAll, 
+  onSaveDraft, 
+  onSearch, 
+  searchQuery, 
+  isSaving,
+  onSyncOffline,
+  isSyncing,
+  isOnline
 }: {
-  isOpen: boolean;
-  onClose: () => void;
-  onSelect: (status: "present" | "absent" | "late" | "excused") => void;
-  currentStatus: string;
-  learnerName: string;
+  onMarkAll: (status: "present" | "absent") => void;
+  onSaveDraft: () => void;
+  onSearch: (value: string) => void;
+  searchQuery: string;
+  isSaving: boolean;
+  onSyncOffline: () => void;
+  isSyncing: boolean;
+  isOnline: boolean;
 }) => {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-        <h3 className="text-lg font-semibold mb-4">
-          Mark attendance for <span className="text-primary">{learnerName}</span>
-        </h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => onSelect("present")}
-            className={`p-4 rounded-lg border-2 flex flex-col items-center gap-2 ${
-              currentStatus === "present" 
-                ? "border-green-500 bg-green-50" 
-                : "border-gray-200 hover:border-green-300"
-            }`}
-          >
-            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-              <Check className="w-6 h-6 text-green-600" />
-            </div>
-            <span className="font-medium">Present</span>
-          </button>
-
-          <button
-            onClick={() => onSelect("absent")}
-            className={`p-4 rounded-lg border-2 flex flex-col items-center gap-2 ${
-              currentStatus === "absent" 
-                ? "border-red-500 bg-red-50" 
-                : "border-gray-200 hover:border-red-300"
-            }`}
-          >
-            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-              <X className="w-6 h-6 text-red-600" />
-            </div>
-            <span className="font-medium">Absent</span>
-          </button>
-
-          <button
-            onClick={() => onSelect("late")}
-            className={`p-4 rounded-lg border-2 flex flex-col items-center gap-2 ${
-              currentStatus === "late" 
-                ? "border-amber-500 bg-amber-50" 
-                : "border-gray-200 hover:border-amber-300"
-            }`}
-          >
-            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-              <Clock className="w-6 h-6 text-amber-600" />
-            </div>
-            <span className="font-medium">Late</span>
-          </button>
-
-          <button
-            onClick={() => onSelect("excused")}
-            className={`p-4 rounded-lg border-2 flex flex-col items-center gap-2 ${
-              currentStatus === "excused" 
-                ? "border-purple-500 bg-purple-50" 
-                : "border-gray-200 hover:border-purple-300"
-            }`}
-          >
-            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-              <FileText className="w-6 h-6 text-purple-600" />
-            </div>
-            <span className="font-medium">Excused</span>
-          </button>
+    <div className="bg-white rounded-xl p-4 border border-border">
+      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+        {/* Search Bar */}
+        <div className="w-full md:w-auto md:flex-1 max-w-md">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search learners by name..."
+              value={searchQuery}
+              onChange={(e) => onSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+            />
+          </div>
         </div>
-        <div className="flex gap-3 mt-6">
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <button
-            onClick={onClose}
-            className="flex-1 border border-border py-2.5 rounded-lg font-medium hover:bg-gray-50"
+            onClick={() => onMarkAll("present")}
+            className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-3 py-2 rounded-lg font-medium hover:bg-green-200 text-sm"
           >
-            Cancel
+            <UserCheck className="w-4 h-4" />
+            All Present
           </button>
+          <button
+            onClick={() => onMarkAll("absent")}
+            className="inline-flex items-center gap-2 bg-red-100 text-red-800 px-3 py-2 rounded-lg font-medium hover:bg-red-200 text-sm"
+          >
+            <UserX className="w-4 h-4" />
+            All Absent
+          </button>
+          <button
+            onClick={onSaveDraft}
+            disabled={isSaving}
+            className="inline-flex items-center gap-2 border border-border px-3 py-2 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 text-sm"
+          >
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {isSaving ? "Saving..." : "Save"}
+          </button>
+          {!isOnline && (
+            <button
+              onClick={onSyncOffline}
+              disabled={isSyncing}
+              className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-2 rounded-lg font-medium hover:bg-blue-200 disabled:opacity-50 text-sm"
+            >
+              {isSyncing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              {isSyncing ? "Syncing..." : "Sync Now"}
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-// Excused Reason Modal
-const ExcusedReasonModal = ({
-  isOpen,
-  onClose,
-  onSave,
-  learnerName
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onSave: (reason: string) => void;
-  learnerName: string;
+// Learner Row Component
+const LearnerRow = ({ 
+  learner, 
+  index, 
+  record, 
+  onStatusChange,
+  onNoteChange,
+  onExcusedReasonChange
+}: { 
+  learner: any;
+  index: number;
+  record: any;
+  onStatusChange: (learnerId: string, status: "present" | "absent" | "late" | "excused") => void;
+  onNoteChange: (learnerId: string, note: string) => void;
+  onExcusedReasonChange: (learnerId: string, reason: string) => void;
 }) => {
-  const [reason, setReason] = useState("");
-  const [customReason, setCustomReason] = useState("");
-  const [useCustom, setUseCustom] = useState(false);
+  const [showNoteInput, setShowNoteInput] = useState(false);
+  const [note, setNote] = useState(record.note || "");
+  const [excusedReason, setExcusedReason] = useState(record.excusedReason || "");
+  const [showExcusedInput, setShowExcusedInput] = useState(false);
 
-  const commonReasons = [
-    "Sick",
-    "Family Emergency",
-    "Doctor Appointment",
-    "School Trip",
-    "Sports Event",
-    "Religious Holiday"
-  ];
-
-  const handleSave = () => {
-    if (!reason.trim() && !customReason.trim()) {
-      toast.error("Please provide a reason");
-      return;
-    }
-    onSave(useCustom ? customReason : reason);
-    setReason("");
-    setCustomReason("");
-    setUseCustom(false);
+  const handleNoteSave = () => {
+    onNoteChange(learner.id, note);
+    setShowNoteInput(false);
   };
 
-  if (!isOpen) return null;
+  const handleExcusedReasonSave = () => {
+    if (excusedReason.trim()) {
+      onExcusedReasonChange(learner.id, excusedReason.trim());
+      setShowExcusedInput(false);
+    }
+  };
+
+  // Get status display
+  const getStatusColor = (status: string | null) => {
+    if (!status) return "bg-gray-100 text-gray-800";
+    switch (status) {
+      case "present": return "bg-green-100 text-green-800";
+      case "absent": return "bg-red-100 text-red-800";
+      case "late": return "bg-amber-100 text-amber-800";
+      case "excused": return "bg-purple-100 text-purple-800";
+      default: return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getStatusIcon = (status: string | null) => {
+    if (!status) return <Circle className="w-4 h-4" />;
+    switch (status) {
+      case "present": return <Check className="w-4 h-4" />;
+      case "absent": return <X className="w-4 h-4" />;
+      case "late": return <Clock className="w-4 h-4" />;
+      case "excused": return <FileText className="w-4 h-4" />;
+      default: return <Circle className="w-4 h-4" />;
+    }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-        <h3 className="text-lg font-semibold mb-2">
-          Reason for excused absence
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          For: <span className="font-medium">{learnerName}</span>
-        </p>
-
-        {!useCustom ? (
-          <>
-            <div className="space-y-2 mb-4">
-              {commonReasons.map((commonReason) => (
-                <label
-                  key={commonReason}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-gray-50 cursor-pointer"
-                >
-                  <input
-                    type="radio"
-                    name="reason"
-                    value={commonReason}
-                    checked={reason === commonReason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="text-primary"
-                  />
-                  <span>{commonReason}</span>
-                </label>
-              ))}
+    <div className="bg-white rounded-lg border border-border p-4 hover:border-primary/30 transition-all duration-200">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        {/* Learner Info */}
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <div className="text-gray-500 font-medium">#{index + 1}</div>
+            <div>
+              <h4 className="font-semibold text-gray-900">{learner.name}</h4>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  learner.sex === "M" 
+                    ? "bg-blue-100 text-blue-800" 
+                    : "bg-pink-100 text-pink-800"
+                }`}>
+                  {learner.sex === "M" ? "Male" : "Female"}
+                </span>
+                {learner.parentPhone && (
+                  <span className="text-xs text-gray-500">
+                    📱 {learner.parentPhone}
+                  </span>
+                )}
+              </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setUseCustom(true)}
-              className="w-full py-2.5 border border-dashed border-border rounded-lg text-gray-600 hover:bg-gray-50 mb-4"
-            >
-              + Other reason
-            </button>
-          </>
-        ) : (
-          <div className="mb-4">
-            <textarea
-              value={customReason}
-              onChange={(e) => setCustomReason(e.target.value)}
-              placeholder="Enter custom reason..."
-              className="w-full p-3 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none min-h-[120px]"
-              rows={3}
-            />
-            <button
-              type="button"
-              onClick={() => setUseCustom(false)}
-              className="text-sm text-primary mt-2 hover:underline"
-            >
-              ← Back to common reasons
-            </button>
           </div>
-        )}
+        </div>
 
-        <div className="flex gap-3">
+        {/* Status Selection */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
           <button
-            onClick={onClose}
-            className="flex-1 border border-border py-2.5 rounded-lg font-medium hover:bg-gray-50"
+            onClick={() => onStatusChange(learner.id, "present")}
+            className={`flex items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+              record.status === "present" 
+                ? "bg-green-500 text-white shadow-sm" 
+                : record.status === null
+                ? "bg-gray-100 text-gray-600 hover:bg-green-100 hover:text-green-800"
+                : "bg-green-100 text-green-800 hover:bg-green-200"
+            }`}
           >
-            Cancel
+            <Check className="w-4 h-4" />
+            <span className="text-sm font-medium">Present</span>
           </button>
+          
           <button
-            onClick={handleSave}
-            disabled={(!reason && !customReason) || (useCustom && !customReason.trim())}
-            className="flex-1 bg-primary text-white py-2.5 rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
+            onClick={() => onStatusChange(learner.id, "absent")}
+            className={`flex items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+              record.status === "absent" 
+                ? "bg-red-500 text-white shadow-sm" 
+                : record.status === null
+                ? "bg-gray-100 text-gray-600 hover:bg-red-100 hover:text-red-800"
+                : "bg-red-100 text-red-800 hover:bg-red-200"
+            }`}
           >
-            Save Reason
+            <X className="w-4 h-4" />
+            <span className="text-sm font-medium">Absent</span>
           </button>
+          
+          <button
+            onClick={() => onStatusChange(learner.id, "late")}
+            className={`flex items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+              record.status === "late" 
+                ? "bg-amber-500 text-white shadow-sm" 
+                : record.status === null
+                ? "bg-gray-100 text-gray-600 hover:bg-amber-100 hover:text-amber-800"
+                : "bg-amber-100 text-amber-800 hover:bg-amber-200"
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span className="text-sm font-medium">Late</span>
+          </button>
+          
+          <button
+            onClick={() => {
+              onStatusChange(learner.id, "excused");
+              setShowExcusedInput(true);
+            }}
+            className={`flex items-center justify-center gap-1 p-2 rounded-lg transition-all ${
+              record.status === "excused" 
+                ? "bg-purple-500 text-white shadow-sm" 
+                : record.status === null
+                ? "bg-gray-100 text-gray-600 hover:bg-purple-100 hover:text-purple-800"
+                : "bg-purple-100 text-purple-800 hover:bg-purple-200"
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span className="text-sm font-medium">Excused</span>
+          </button>
+        </div>
+
+        {/* Note/Reason Section */}
+        <div className="sm:w-48">
+          {record.status === "excused" ? (
+            <div>
+              {showExcusedInput ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={excusedReason}
+                    onChange={(e) => setExcusedReason(e.target.value)}
+                    placeholder="Enter excused reason..."
+                    className="w-full p-2 text-sm border border-purple-200 rounded focus:ring-1 focus:ring-purple-300 focus:border-purple-400 outline-none"
+                    rows={2}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleExcusedReasonSave}
+                      className="px-2 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowExcusedInput(false);
+                        setExcusedReason(record.excusedReason || "");
+                      }}
+                      className="px-2 py-1 border border-border text-xs rounded hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setShowExcusedInput(true)}
+                  className="text-sm text-purple-700 bg-purple-50 p-2 rounded border border-purple-100 cursor-pointer hover:bg-purple-100"
+                >
+                  <div className="font-medium mb-1">Reason:</div>
+                  <div>{record.excusedReason || "Click to add reason"}</div>
+                </div>
+              )}
+            </div>
+          ) : record.status === "late" && record.note ? (
+            <div className="text-sm text-amber-700 bg-amber-50 p-2 rounded border border-amber-100">
+              {record.note}
+            </div>
+          ) : showNoteInput ? (
+            <div className="space-y-2">
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Add note..."
+                className="w-full p-2 text-sm border border-border rounded focus:ring-1 focus:ring-primary/20 focus:border-primary outline-none"
+                rows={2}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleNoteSave}
+                  className="px-2 py-1 bg-primary text-white text-xs rounded hover:bg-primary/90"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setShowNoteInput(false);
+                    setNote(record.note || "");
+                  }}
+                  className="px-2 py-1 border border-border text-xs rounded hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : record.note ? (
+            <div className="text-sm text-gray-700 bg-gray-50 p-2 rounded border border-gray-100">
+              {record.note}
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowNoteInput(true)}
+              className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+            >
+              <FileText className="w-4 h-4" />
+              Add note
+            </button>
+          )}
+        </div>
+      </div>
+      
+      {/* Current Status Badge */}
+      <div className="mt-2 pt-2 border-t border-gray-100">
+        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
+          {getStatusIcon(record.status)}
+          <span>Status: {record.status ? record.status.charAt(0).toUpperCase() + record.status.slice(1) : "Not Marked"}</span>
         </div>
       </div>
     </div>
@@ -285,13 +425,15 @@ const ExcusedReasonModal = ({
 // Main Component
 export default function AttendanceRollCall() {
   // Hooks
-  const { getTeachersForClass, teachers } = useTeacherManagement();
+  const { getTeachersForClass } = useTeacherManagement();
   const { classes, getClassLearners } = useClassManagement();
   const { 
     saveDraftAttendance, 
     submitAttendance, 
     getDraftAttendance,
-    loading: attendanceLoading 
+    loading: attendanceLoading,
+    isOnline,
+    syncOfflineSessions
   } = useAttendance();
   const { currentUser } = useAuth();
 
@@ -303,11 +445,20 @@ export default function AttendanceRollCall() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Modal states
-  const [selectedLearner, setSelectedLearner] = useState<{id: string, name: string} | null>(null);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showExcusedModal, setShowExcusedModal] = useState(false);
+  const [syncingOffline, setSyncingOffline] = useState(false);
+
+  // Auto-sync when coming online
+  useEffect(() => {
+    const handleOnline = () => {
+      handleSyncOffline();
+    };
+    
+    window.addEventListener('online', handleOnline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, []);
 
   // Get teacher's assigned classes
   const teacherClasses = useMemo(() => {
@@ -328,11 +479,11 @@ export default function AttendanceRollCall() {
         const classLearners = await getClassLearners(selectedClassId);
         setLearners(classLearners);
         
-        // Initialize all as present
+        // Initialize all as NULL - NO DEFAULT STATUS
         const initialRecords: Record<string, any> = {};
         classLearners.forEach((learner: any) => {
           initialRecords[learner.id] = {
-            status: "present",
+            status: null,
             note: "",
             excusedReason: "",
           };
@@ -343,24 +494,31 @@ export default function AttendanceRollCall() {
         const selectedClass = teacherClasses.find(c => c.id === selectedClassId);
         if (selectedClass) {
           const classTeachers = getTeachersForClass(selectedClassId);
-          const subject = classTeachers[0]?.subjects?.[0] || "Class";
-          setSessionTitle(`${selectedClass.name} - ${subject} - Roll Call`);
+          const teacherAssignment = classTeachers.find(t => t.teacherId === currentUser?.uid);
+          const subject = teacherAssignment?.subjects?.[0] || "Class";
+          setSessionTitle(`${selectedClass.name} - ${subject} - ${format(new Date(), "MMM d, yyyy")}`);
         }
 
-        // Check for existing draft
-        const draft = await getDraftAttendance(selectedClassId, new Date().toISOString().split('T')[0]);
+        // Check for existing draft for today
+        const today = new Date().toISOString().split('T')[0];
+        const draft = await getDraftAttendance(selectedClassId, today);
+        
         if (draft) {
           // Convert records array to object format
           const recordsObj: Record<string, any> = {};
           draft.records.forEach((record: any) => {
             recordsObj[record.learnerId] = {
-              status: record.status || "present",
+              status: record.status || null,
               note: record.note || "",
               excusedReason: record.excusedReason || "",
             };
           });
-          setAttendanceRecords(recordsObj);
+          
+          // Merge with initial records
+          const mergedRecords = { ...initialRecords, ...recordsObj };
+          setAttendanceRecords(mergedRecords);
           setSessionTitle(draft.title || "");
+          toast.success("Loaded existing draft for today");
         }
       } catch (error) {
         console.error("Failed to load learners:", error);
@@ -369,13 +527,12 @@ export default function AttendanceRollCall() {
     };
 
     loadLearners();
-  }, [selectedClassId, teacherClasses, getClassLearners, getTeachersForClass, getDraftAttendance]);
+  }, [selectedClassId, teacherClasses, getClassLearners, getTeachersForClass, getDraftAttendance, currentUser]);
 
   // Filter learners based on search
   const filteredLearners = useMemo(() => {
     return learners.filter(learner => 
-      learner.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      learner.id.toLowerCase().includes(searchQuery.toLowerCase())
+      learner.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [learners, searchQuery]);
 
@@ -386,6 +543,7 @@ export default function AttendanceRollCall() {
     const absent = Object.values(attendanceRecords).filter(r => r.status === "absent").length;
     const late = Object.values(attendanceRecords).filter(r => r.status === "late").length;
     const excused = Object.values(attendanceRecords).filter(r => r.status === "excused").length;
+    const pending = Object.values(attendanceRecords).filter(r => r.status === null).length;
     
     const boys = learners.filter(l => l.sex === "M").length;
     const girls = learners.filter(l => l.sex === "F").length;
@@ -396,20 +554,26 @@ export default function AttendanceRollCall() {
       l.sex === "F" && attendanceRecords[l.id]?.status === "present"
     ).length;
 
+    // Calculate attendance rate excluding pending
+    const markedTotal = total - pending;
+    const attendanceRate = markedTotal > 0 ? ((present + late + excused) / markedTotal) * 100 : 0;
+
     return {
       total,
       present,
       absent,
       late,
       excused,
-      attendanceRate: total > 0 ? (present / total) * 100 : 0,
+      pending,
+      attendanceRate,
       boys: { total: boys, present: boysPresent },
       girls: { total: girls, present: girlsPresent },
+      marked: markedTotal,
     };
   }, [learners, attendanceRecords]);
 
   // Handlers
-  const handleStatusChange = (learnerId: string, status: "present" | "absent" | "late" | "excused") => {
+  const handleStatusChange = useCallback((learnerId: string, status: "present" | "absent" | "late" | "excused") => {
     setAttendanceRecords(prev => ({
       ...prev,
       [learnerId]: {
@@ -419,16 +583,19 @@ export default function AttendanceRollCall() {
         excusedReason: status !== "excused" ? "" : prev[learnerId]?.excusedReason,
       }
     }));
+  }, []);
 
-    if (status === "excused") {
-      setSelectedLearner({ id: learnerId, name: learners.find(l => l.id === learnerId)?.name || "" });
-      setShowExcusedModal(true);
-    }
-    
-    setShowStatusModal(false);
-  };
+  const handleNoteChange = useCallback((learnerId: string, note: string) => {
+    setAttendanceRecords(prev => ({
+      ...prev,
+      [learnerId]: {
+        ...prev[learnerId],
+        note,
+      }
+    }));
+  }, []);
 
-  const handleExcusedReason = (learnerId: string, reason: string) => {
+  const handleExcusedReasonChange = useCallback((learnerId: string, reason: string) => {
     setAttendanceRecords(prev => ({
       ...prev,
       [learnerId]: {
@@ -436,10 +603,10 @@ export default function AttendanceRollCall() {
         excusedReason: reason,
       }
     }));
-    setShowExcusedModal(false);
-  };
+    toast.success("Reason saved");
+  }, []);
 
-  const handleMarkAll = (status: "present" | "absent") => {
+  const handleMarkAll = useCallback((status: "present" | "absent") => {
     const newRecords = { ...attendanceRecords };
     learners.forEach(learner => {
       newRecords[learner.id] = {
@@ -449,9 +616,11 @@ export default function AttendanceRollCall() {
       };
     });
     setAttendanceRecords(newRecords);
-  };
+    toast.success(`Marked all learners as ${status}`);
+  }, [attendanceRecords, learners]);
 
-  const handleSaveDraft = async () => {
+  // Save draft attendance
+  const handleSaveDraft = useCallback(async () => {
     if (!selectedClassId || !sessionTitle.trim()) {
       toast.error("Please select a class and add a session title");
       return;
@@ -465,14 +634,15 @@ export default function AttendanceRollCall() {
     setIsSaving(true);
     try {
       const selectedClass = teacherClasses.find(c => c.id === selectedClassId);
+      const today = new Date().toISOString().split('T')[0];
       
       const sessionData = {
         title: sessionTitle,
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         classId: selectedClassId,
         className: selectedClass?.name || "",
         teacherId: currentUser.uid,
-        teacherName: currentUser.name || currentUser.email || "Teacher",
+        teacherName: currentUser.displayName || currentUser.email || "Teacher",
         status: "draft" as const,
         records: Object.entries(attendanceRecords).map(([learnerId, record]) => {
           const learner = learners.find(l => l.id === learnerId);
@@ -490,16 +660,16 @@ export default function AttendanceRollCall() {
       };
 
       await saveDraftAttendance(sessionData);
-      toast.success("Draft saved successfully");
+      toast.success("Draft saved successfully!");
     } catch (error: any) {
-      console.error("Save draft error:", error);
       toast.error(`Failed to save draft: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [selectedClassId, sessionTitle, currentUser, teacherClasses, attendanceRecords, learners, statistics, saveDraftAttendance]);
 
-  const handleSubmit = async () => {
+  // Submit attendance - CRITICAL FUNCTION
+  const handleSubmit = useCallback(async () => {
     if (!selectedClassId) {
       toast.error("Please select a class");
       return;
@@ -510,6 +680,29 @@ export default function AttendanceRollCall() {
       return;
     }
 
+    // Validate ALL learners have status (not null)
+    const missingStatus = Object.entries(attendanceRecords)
+      .filter(([_, record]) => record.status === null)
+      .map(([learnerId]) => learners.find(l => l.id === learnerId)?.name)
+      .filter(Boolean);
+
+    if (missingStatus.length > 0) {
+      toast.error(
+        <div className="text-left">
+          Please mark attendance for all learners:
+          <ul className="mt-1 list-disc list-inside">
+            {missingStatus.slice(0, 3).map((name, idx) => (
+              <li key={idx}>{name}</li>
+            ))}
+            {missingStatus.length > 3 && (
+              <li>...and {missingStatus.length - 3} more</li>
+            )}
+          </ul>
+        </div>
+      );
+      return;
+    }
+
     // Validate excused reasons
     const missingReasons = Object.entries(attendanceRecords)
       .filter(([_, record]) => record.status === "excused" && !record.excusedReason?.trim())
@@ -517,21 +710,34 @@ export default function AttendanceRollCall() {
       .filter(Boolean);
 
     if (missingReasons.length > 0) {
-      toast.error(`Please provide reasons for excused absences: ${missingReasons.join(", ")}`);
+      toast.error(
+        <div className="text-left">
+          Please provide reasons for excused absences:
+          <ul className="mt-1 list-disc list-inside">
+            {missingReasons.slice(0, 3).map((name, idx) => (
+              <li key={idx}>{name}</li>
+            ))}
+            {missingReasons.length > 3 && (
+              <li>...and {missingReasons.length - 3} more</li>
+            )}
+          </ul>
+        </div>
+      );
       return;
     }
 
     setIsSubmitting(true);
     try {
       const selectedClass = teacherClasses.find(c => c.id === selectedClassId);
+      const today = new Date().toISOString().split('T')[0];
       
       const sessionData = {
         title: sessionTitle,
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         classId: selectedClassId,
         className: selectedClass?.name || "",
         teacherId: currentUser.uid,
-        teacherName: currentUser.name || currentUser.email || "Teacher",
+        teacherName: currentUser.displayName || currentUser.email || "Teacher",
         status: "submitted" as const,
         records: Object.entries(attendanceRecords).map(([learnerId, record]) => {
           const learner = learners.find(l => l.id === learnerId);
@@ -549,39 +755,101 @@ export default function AttendanceRollCall() {
       };
 
       await submitAttendance(sessionData);
-      toast.success("Attendance submitted successfully!");
+      
+      toast.success(
+        <div className="flex items-center gap-2">
+          <Check className="w-5 h-5" />
+          <div>
+            <span className="font-medium">Attendance submitted successfully!</span>
+            <div className="text-sm text-gray-600 mt-1">
+              {isOnline ? "It will appear in the admin overview." : "Saved offline - will sync when online."}
+            </div>
+          </div>
+        </div>
+      );
       
       // Reset form
       setSelectedClassId("");
       setSessionTitle("");
       setAttendanceRecords({});
       setSearchQuery("");
+      
     } catch (error: any) {
-      console.error("Submit error:", error);
-      toast.error(`Failed to submit attendance: ${error.message}`);
+      toast.error(
+        <div className="flex items-center gap-2">
+          <AlertCircle className="w-5 h-5" />
+          <div>
+            <span className="font-medium">Failed to submit attendance</span>
+            <div className="text-sm text-gray-600 mt-1">
+              {error.message || "Unknown error occurred"}
+              {!isOnline && " (You're offline - data saved locally)"}
+            </div>
+          </div>
+        </div>
+      );
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [selectedClassId, currentUser, attendanceRecords, learners, teacherClasses, sessionTitle, statistics, submitAttendance, isOnline]);
+
+  const handleSyncOffline = useCallback(async () => {
+    setSyncingOffline(true);
+    try {
+      await syncOfflineSessions();
+      toast.success("Offline sessions synced successfully!");
+    } catch (error) {
+      toast.error("Failed to sync offline sessions");
+    } finally {
+      setSyncingOffline(false);
+    }
+  }, [syncOfflineSessions]);
+
+  // Auto-save draft every 30 seconds
+  useEffect(() => {
+    if (Object.keys(attendanceRecords).length === 0) return;
+
+    const autoSaveInterval = setInterval(() => {
+      if (!isSaving && !isSubmitting && selectedClassId && sessionTitle) {
+        handleSaveDraft();
+      }
+    }, 30000);
+
+    return () => clearInterval(autoSaveInterval);
+  }, [attendanceRecords, isSaving, isSubmitting, selectedClassId, sessionTitle, handleSaveDraft]);
 
   if (attendanceLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
+        <Loader2 className="w-12 h-12 animate-spin text-primary mb-4" />
+        <p className="text-gray-600">Loading attendance data...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
+      {/* Header */}
       <div>
-        <h2 className="text-3xl font-bold text-gray-900">Attendance Roll Call</h2>
-        <p className="text-muted-foreground mt-1">
-          Mark attendance for your assigned classes
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Attendance Roll Call</h2>
+          {!isOnline && (
+            <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">
+              Offline
+            </span>
+          )}
+        </div>
+        <p className="text-muted-foreground mt-1 text-sm md:text-base">
+          Mark attendance for your assigned classes. All learners start unmarked.
+          {!isOnline && (
+            <span className="text-amber-600 font-medium ml-2">
+              Working offline - will sync when connection returns
+            </span>
+          )}
         </p>
       </div>
 
-      <div className="bg-white rounded-xl p-6 border border-border">
+      {/* Class Selection Card */}
+      <div className="bg-white rounded-xl p-4 md:p-6 border border-border shadow-sm">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -614,222 +882,194 @@ export default function AttendanceRollCall() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-gray-50 p-3 rounded-lg">
             <Calendar className="w-5 h-5 text-gray-500" />
             <span className="text-sm text-gray-600">
-              {new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
+              {format(new Date(), "EEEE, MMMM d, yyyy")}
             </span>
           </div>
         </div>
       </div>
 
       {selectedClassId && learners.length > 0 && (
-        <div className="bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-xl p-6">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Attendance Summary
-              </h3>
-              <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm">Total: <strong>{statistics.total}</strong></span>
+        <>
+          {/* Statistics Card */}
+          <div className="bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/20 rounded-xl p-4 md:p-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  Attendance Summary
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-900">{statistics.total}</div>
+                    <div className="text-sm text-gray-600">Total</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">{statistics.present}</div>
+                    <div className="text-sm text-gray-600">Present</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-600">{statistics.absent}</div>
+                    <div className="text-sm text-gray-600">Absent</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-amber-600">{statistics.late}</div>
+                    <div className="text-sm text-gray-600">Late</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-purple-600">{statistics.excused}</div>
+                    <div className="text-sm text-gray-600">Excused</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-600">{statistics.pending}</div>
+                    <div className="text-sm text-gray-600">Pending</div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <span className="text-sm">Present: <strong>{statistics.present}</strong></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                  <span className="text-sm">Absent: <strong>{statistics.absent}</strong></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                  <span className="text-sm">Late: <strong>{statistics.late}</strong></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                  <span className="text-sm">Excused: <strong>{statistics.excused}</strong></span>
+                <div className="mt-3 text-sm text-gray-600">
+                  {statistics.marked}/{statistics.total} learners marked • {statistics.attendanceRate.toFixed(1)}% attendance rate
                 </div>
               </div>
-            </div>
 
-            <div className="bg-white rounded-lg p-4 border border-border min-w-[200px]">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
-                  {statistics.attendanceRate.toFixed(1)}%
-                </div>
-                <div className="text-sm text-gray-500">Attendance Rate</div>
-                <div className="flex justify-between text-xs text-gray-500 mt-2">
-                  <span>👦 Boys: {statistics.boys.present}/{statistics.boys.total}</span>
-                  <span>👧 Girls: {statistics.girls.present}/{statistics.girls.total}</span>
+              <div className="bg-white rounded-lg p-4 border border-border min-w-[180px]">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {statistics.attendanceRate.toFixed(1)}%
+                  </div>
+                  <div className="text-sm text-gray-500">Attendance Rate</div>
+                  <div className="flex justify-between text-xs text-gray-500 mt-2">
+                    <span>👦 {statistics.boys.present}/{statistics.boys.total}</span>
+                    <span>👧 {statistics.girls.present}/{statistics.girls.total}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {selectedClassId && learners.length > 0 && (
-        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-          <div className="flex flex-wrap gap-2">
-            <button
+          {/* Quick Actions */}
+          <QuickActionsBar
+            onMarkAll={handleMarkAll}
+            onSaveDraft={handleSaveDraft}
+            onSearch={setSearchQuery}
+            searchQuery={searchQuery}
+            isSaving={isSaving}
+            onSyncOffline={handleSyncOffline}
+            isSyncing={syncingOffline}
+            isOnline={isOnline}
+          />
+
+          {/* Status Overview Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <StatusButton
+              status="pending"
+              isSelected={false}
+              onClick={() => {}}
+              count={statistics.pending}
+            />
+            <StatusButton
+              status="present"
+              isSelected={false}
               onClick={() => handleMarkAll("present")}
-              className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-lg font-medium hover:bg-green-200"
-            >
-              <UserCheck className="w-4 h-4" />
-              Mark All Present
-            </button>
-            <button
+              count={statistics.present}
+            />
+            <StatusButton
+              status="absent"
+              isSelected={false}
               onClick={() => handleMarkAll("absent")}
-              className="inline-flex items-center gap-2 bg-red-100 text-red-800 px-4 py-2 rounded-lg font-medium hover:bg-red-200"
-            >
-              <UserX className="w-4 h-4" />
-              Mark All Absent
-            </button>
-            <button
-              onClick={handleSaveDraft}
-              disabled={isSaving}
-              className="inline-flex items-center gap-2 border border-border px-4 py-2 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" />
-              {isSaving ? "Saving..." : "Save Draft"}
-            </button>
-          </div>
-
-          <div className="relative w-full lg:w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              placeholder="Search learners..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+              count={statistics.absent}
+            />
+            <StatusButton
+              status="late"
+              isSelected={false}
+              onClick={() => {}}
+              count={statistics.late}
+            />
+            <StatusButton
+              status="excused"
+              isSelected={false}
+              onClick={() => {}}
+              count={statistics.excused}
             />
           </div>
-        </div>
-      )}
 
-      {selectedClassId && learners.length > 0 && (
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-full">
-              <thead className="bg-gray-50 border-b border-border">
-                <tr>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700">No.</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700">Learner Name</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700">Gender</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700">Status</th>
-                  <th className="text-left py-4 px-6 font-semibold text-gray-700">Note/Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLearners.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-500">
-                      {searchQuery ? "No learners match your search." : "No learners found."}
-                    </td>
-                  </tr>
-                ) : (
-                  filteredLearners.map((learner, index) => {
-                    const record = attendanceRecords[learner.id] || { status: "present" };
-                    
-                    return (
-                      <tr 
-                        key={learner.id} 
-                        className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50"
-                      >
-                        <td className="py-4 px-6 text-gray-600">{index + 1}.</td>
-                        <td className="py-4 px-6">
-                          <div className="font-medium text-gray-900">{learner.name}</div>
-                        </td>
-                        <td className="py-4 px-6">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${
-                            learner.sex === "M" 
-                              ? "bg-blue-100 text-blue-800" 
-                              : "bg-pink-100 text-pink-800"
-                          }`}>
-                            <User className="w-3 h-3" />
-                            {learner.sex === "M" ? "Male" : "Female"}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6">
-                          <StatusBadge 
-                            status={record.status}
-                            onClick={() => {
-                              setSelectedLearner({ id: learner.id, name: learner.name });
-                              setShowStatusModal(true);
-                            }}
-                          />
-                        </td>
-                        <td className="py-4 px-6">
-                          <div className="max-w-xs">
-                            {record.status === "excused" && record.excusedReason ? (
-                              <span className="text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-lg">
-                                {record.excusedReason}
-                              </span>
-                            ) : record.status === "late" && record.note ? (
-                              <span className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-lg">
-                                {record.note}
-                              </span>
-                            ) : record.note ? (
-                              <span className="text-sm text-gray-600 bg-gray-50 px-3 py-1 rounded-lg">
-                                {record.note}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-gray-400">—</span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+          {/* Learners List */}
+          <div className="space-y-3">
+            {filteredLearners.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  {searchQuery ? "No learners match your search" : "No learners found"}
+                </h3>
+                <p className="text-gray-600">
+                  {searchQuery ? "Try a different search term" : "Add learners to this class first"}
+                </p>
+              </div>
+            ) : (
+              filteredLearners.map((learner, index) => {
+                const record = attendanceRecords[learner.id] || { status: null };
+                
+                return (
+                  <LearnerRow
+                    key={learner.id}
+                    learner={learner}
+                    index={index}
+                    record={record}
+                    onStatusChange={handleStatusChange}
+                    onNoteChange={handleNoteChange}
+                    onExcusedReasonChange={handleExcusedReasonChange}
+                  />
+                );
+              })
+            )}
           </div>
-        </div>
-      )}
 
-      {selectedClassId && learners.length > 0 && (
-        <div className="flex justify-end gap-4 pt-4">
-          <button
-            onClick={handleSaveDraft}
-            disabled={isSaving}
-            className="border border-border px-6 py-3 rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50"
-          >
-            {isSaving ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Saving Draft...
-              </span>
-            ) : (
-              "Save as Draft"
-            )}
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="bg-primary text-white px-6 py-3 rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50"
-          >
-            {isSubmitting ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Submitting...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <Send className="w-4 h-4" />
-                Submit Attendance
-              </span>
-            )}
-          </button>
-        </div>
+          {/* Submit Section */}
+          <div className="sticky bottom-0 bg-white border-t border-border p-4 shadow-lg">
+            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+              <div className="text-sm text-gray-600">
+                <span className="font-medium">{statistics.marked}/{statistics.total}</span> learners marked
+                {searchQuery && <span> • {filteredLearners.length} shown (filtered)</span>}
+                {!isOnline && (
+                  <span className="text-amber-600 font-medium ml-2">• Working offline</span>
+                )}
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSaveDraft}
+                  disabled={isSaving}
+                  className="px-4 py-2.5 border border-border rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50 text-sm"
+                >
+                  {isSaving ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </span>
+                  ) : (
+                    "Save as Draft"
+                  )}
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || statistics.pending > 0}
+                  className="px-4 py-2.5 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 text-sm"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Send className="w-4 h-4" />
+                      {statistics.pending > 0 ? `Submit (${statistics.pending} pending)` : "Submit Attendance"}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {selectedClassId && learners.length === 0 && (
@@ -840,23 +1080,20 @@ export default function AttendanceRollCall() {
         </div>
       )}
 
-      {selectedLearner && (
-        <>
-          <StatusSelectorModal
-            isOpen={showStatusModal}
-            onClose={() => setShowStatusModal(false)}
-            onSelect={(status) => handleStatusChange(selectedLearner.id, status)}
-            currentStatus={attendanceRecords[selectedLearner.id]?.status || "present"}
-            learnerName={selectedLearner.name}
-          />
-          
-          <ExcusedReasonModal
-            isOpen={showExcusedModal}
-            onClose={() => setShowExcusedModal(false)}
-            onSave={(reason) => handleExcusedReason(selectedLearner.id, reason)}
-            learnerName={selectedLearner.name}
-          />
-        </>
+      {!selectedClassId && teacherClasses.length > 0 && (
+        <div className="text-center py-12">
+          <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Select a class to begin</h3>
+          <p className="text-gray-600">Choose one of your assigned classes to mark attendance</p>
+        </div>
+      )}
+
+      {!selectedClassId && teacherClasses.length === 0 && (
+        <div className="text-center py-12">
+          <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">No classes assigned</h3>
+          <p className="text-gray-600">You haven't been assigned to any classes yet. Contact your administrator.</p>
+        </div>
       )}
     </div>
   );

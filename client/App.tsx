@@ -25,6 +25,7 @@ import TeacherManagement from "@/pages/AdminDashboard/TeacherManagement";
 import AdminResultsAnalysis from "@/pages/AdminDashboard/ResultsAnalysis";
 import ReportCards from "@/pages/AdminDashboard/ReportCards";
 import AttendanceOverview from "@/pages/AdminDashboard/AttendanceOverview";
+import AdminAssessmentGenerator from "./pages/AdminDashboard/AdminAssessmentGenerator";
 
 // Teacher Dashboard Pages
 import TeacherDashboard from "@/pages/TeacherDashboard/TeacherDashboard";
@@ -33,6 +34,7 @@ import TeacherResultsAnalysis from "@/pages/TeacherDashboard/ResultsAnalysis";
 import AttendanceRollCall from "@/pages/TeacherDashboard/AttendanceRollCall";
 import LessonPlanning from "@/pages/TeacherDashboard/LessonPlanning"; // NEW
 import AssessmentGenerator from "@/pages/TeacherDashboard/AssessmentGenerator"; // NEW
+import SchemesOfWork from "@/pages/TeacherDashboard/SchemesOfWork";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +60,7 @@ const App = () => (
               <Route path="/admin/teacher-management" element={<TeacherManagement />} />
               <Route path="/admin/attendance" element={<AttendanceOverview />} />
               <Route path="/admin/results-analysis" element={<AdminResultsAnalysis />} />
+              <Route path="/admin/assessments" element={<AdminAssessmentGenerator />} />"
               <Route path="/admin/report-cards" element={<ReportCards />} />
             </Route>
 
@@ -72,6 +75,7 @@ const App = () => (
               <Route path="/teacher/lesson-plans" element={<LessonPlanning />} /> {/* NEW */}
               <Route path="/teacher/assessments" element={<AssessmentGenerator />} /> {/* NEW */}
               <Route path="/teacher/results-analysis" element={<TeacherResultsAnalysis />} />
+              <Route path="teacher/schemes" element={<SchemesOfWork />} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

@@ -61,6 +61,12 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
       icon: BarChart3,
     },
     {
+      label: "Assessment Generator",
+      href: "/admin/assessments",
+      icon: FileQuestion,
+
+    },
+    {
       label: "Report Cards",
       href: "/admin/report-cards",
       icon: FileText,
@@ -77,6 +83,11 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
       label: "Result Entry",
       href: "/teacher/result-entry",
       icon: BookOpen,
+    },
+    {
+      label: "Schemes of Work",
+      href: "/teacher/schemes",
+      icon: FileText,
     },
     {
       label: "Attendance",
