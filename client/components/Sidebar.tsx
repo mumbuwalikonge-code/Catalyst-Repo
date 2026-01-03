@@ -1,4 +1,4 @@
-// src/components/Sidebar.tsx (Updated)
+// src/components/Sidebar.tsx
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -7,8 +7,6 @@ import {
   FileText,
   Settings,
   LogOut,
-  Menu,
-  X,
   School,
   Award,
   Calendar,
@@ -16,7 +14,6 @@ import {
   FileEdit,
   FileQuestion,
 } from "lucide-react";
-import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface SidebarProps {
@@ -31,8 +28,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
   
   const isAdmin = currentUser?.role === 'admin';
   const isTeacher = currentUser?.role === 'teacher';
-  
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   const adminMenuItems = [
     {
@@ -64,7 +59,6 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
       label: "Assessment Generator",
       href: "/admin/assessments",
       icon: FileQuestion,
-
     },
     {
       label: "Report Cards",
@@ -126,20 +120,9 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
   return (
     <>
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="lg:hidden fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary/90"
-      >
-        {mobileOpen ? (
-          <X className="w-6 h-6" />
-        ) : (
-          <Menu className="w-6 h-6" />
-        )}
-      </button>
-
       <aside
         className={`fixed lg:static top-0 left-0 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 z-40 ${
-          mobileOpen ? "w-64" : "w-0 lg:w-64"
+          isOpen ? "w-64" : "w-0 lg:w-64"
         } overflow-hidden`}
       >
         <div className="flex flex-col h-full">
@@ -175,7 +158,7 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
                 <Link
                   key={item.href}
                   to={item.href}
-                  onClick={() => setMobileOpen(false)}
+                  onClick={() => isOpen && onToggle()} // Close sidebar on mobile when clicking a link
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
                     active
                       ? "bg-sidebar-primary text-sidebar-primary-foreground"
@@ -212,10 +195,11 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </div>
       </aside>
 
-      {mobileOpen && (
+      {/* Overlay for mobile when sidebar is open */}
+      {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={() => setMobileOpen(false)}
+          onClick={onToggle}
         />
       )}
     </>
